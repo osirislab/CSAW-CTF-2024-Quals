@@ -1,0 +1,7 @@
+{
+  "name": "Literally 1984",
+  "description": "An artist by the name of ‌ made a cover of a song I liked, but I don't remember the original composer of that song. Could you help me find the original composer? Flag Format: csawctf{Firstname_Lastname} (replace all spaces with _)",
+  "author": "lpv2013",
+  "category": "misc",
+  "flag": "csawctf{Susumu_Hirasawa}"
+}

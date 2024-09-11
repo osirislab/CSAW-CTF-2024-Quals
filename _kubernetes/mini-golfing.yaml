@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mini-golfing
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mini-golfing
+  namespace: mini-golfing
+  labels:
+    chal: mini-golfing
+spec:
+  selector:
+    matchLabels:
+      chal: mini-golfing
+  template:
+    metadata:
+      labels:
+        chal: mini-golfing
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: mini-golfing
+        resources:
+          requests:
+            cpu: 1
+            memory: 500Mi
+          limits:
+            cpu: 2
+            memory: 1Gi
+        ports:
+        - containerPort: 9999
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mini-golfing
+  namespace: mini-golfing
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 9999
+      targetPort: 9999
+  selector:
+    chal: mini-golfing
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mini-golfing
+  namespace: mini-golfing
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mini-golfing
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: mini-golfing
+spec:
+  podSelector:
+    matchLabels:
+      chal: mini-golfing
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: mini-golfing
+spec:
+  podSelector:
+    matchLabels:
+      chal: mini-golfing
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution

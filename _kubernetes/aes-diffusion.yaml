@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: aes-diffusion
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aes-diffusion
+  namespace: aes-diffusion
+  labels:
+    chal: aes-diffusion
+spec:
+  selector:
+    matchLabels:
+      chal: aes-diffusion
+  template:
+    metadata:
+      labels:
+        chal: aes-diffusion
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: aes-diffusion
+        resources:
+          requests:
+            cpu: 1
+            memory: 500Mi
+          limits:
+            cpu: 2
+            memory: 1Gi
+        ports:
+        - containerPort: 5000
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aes-diffusion
+  namespace: aes-diffusion
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  selector:
+    chal: aes-diffusion
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: aes-diffusion
+  namespace: aes-diffusion
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: aes-diffusion
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: aes-diffusion
+spec:
+  podSelector:
+    matchLabels:
+      chal: aes-diffusion
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: aes-diffusion
+spec:
+  podSelector:
+    matchLabels:
+      chal: aes-diffusion
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution

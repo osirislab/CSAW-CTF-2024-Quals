@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cbc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cbc
+  namespace: cbc
+  labels:
+    chal: cbc
+spec:
+  selector:
+    matchLabels:
+      chal: cbc
+  template:
+    metadata:
+      labels:
+        chal: cbc
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: cbc
+        resources:
+          requests:
+            cpu: 1
+            memory: 500Mi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        ports:
+        - containerPort: 9996
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cbc
+  namespace: cbc
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 9996
+      targetPort: 9996
+  selector:
+    chal: cbc
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: cbc
+  namespace: cbc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: cbc
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: cbc
+spec:
+  podSelector:
+    matchLabels:
+      chal: cbc
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: cbc
+spec:
+  podSelector:
+    matchLabels:
+      chal: cbc
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution

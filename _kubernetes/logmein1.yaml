@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logmein1
+
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webapp-secrets
+  namespace: logmein1
+type: Opaque
+stringData:
+  DB_HOST: logmein1-db.ct82yg40sg5k.us-east-1.rds.amazonaws.com
+  DB_NAME: postgres
+  DB_USERNAME: postgres
+  DB_PASSWORD: PLEASEDONTLEAKMYPASSWORDXDDDD!!!
+  DB_PORT: "5432"
+  SERVER_PORT: "10086"
+  FLASK_SECRET: DONTSTEALMYKEYPL0XXD567!!!@@@
+  ENCRYPT_KEY: 3E9DTp80EJCpmvvRd8rgBacww7itTR3sg9mqGKxxqktZOprxANJiXFyQ5V5zCH2oqru6sAllMuOfbsnIw742wOuOCSkdYZdR1cKDiMLKIxbPhEiNze7Ee3p7KdFTbwM2qr3fuB9ffPwNAZ2zQYo0UJQUlJ53zriMtqmnpCVSpYdrwhH2AFHJSLgbqOZAqbBXzO6DiyAmdcYz4zzJQvxPFIg9RLX2y07uislFqcx5FuM0lzYxUXoLIyahvV04noV9
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logmein1
+  namespace: logmein1
+  labels:
+    chal: logmein1
+spec:
+  selector:
+    matchLabels:
+      chal: logmein1
+  template:
+    metadata:
+      labels:
+        chal: logmein1
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: logmein1
+        resources:
+          requests:
+            cpu: 2
+            memory: 2Gi
+          limits:
+            cpu: 4
+            memory: 4Gi
+        ports:
+        - containerPort: 10086
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: DB_HOST
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: DB_NAME
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: DB_USERNAME
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: DB_PASSWORD
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: DB_PORT
+        - name: SERVER_PORT
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: SERVER_PORT
+        - name: FLASK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: FLASK_SECRET
+        - name: ENCRYPT_KEY
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: ENCRYPT_KEY
+        volumeMounts:
+        - name: temp-storage
+          mountPath: /tmp
+      volumes:
+      - name: temp-storage
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logmein1
+  namespace: logmein1
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-east-1:058264123223:certificate/614551b1-8738-4648-9db2-9fb2b502f715
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 10086
+  selector:
+    chal: logmein1
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: logmein1
+  namespace: logmein1
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: logmein1
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: logmein1
+spec:
+  podSelector:
+    matchLabels:
+      chal: logmein1
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces

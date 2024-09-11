@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: obfuscation
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: obfuscation
+  namespace: obfuscation
+  labels:
+    chal: obfuscation
+spec:
+  selector:
+    matchLabels:
+      chal: obfuscation
+  template:
+    metadata:
+      labels:
+        chal: obfuscation
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: obfuscation
+        resources:
+          requests:
+            cpu: 1
+            memory: 1Gi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        ports:
+        - containerPort: 5000
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: obfuscation
+  namespace: obfuscation
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  selector:
+    chal: obfuscation
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: obfuscation
+  namespace: obfuscation
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: obfuscation
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: obfuscation
+spec:
+  podSelector:
+    matchLabels:
+      chal: obfuscation
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: obfuscation
+spec:
+  podSelector:
+    matchLabels:
+      chal: obfuscation
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution

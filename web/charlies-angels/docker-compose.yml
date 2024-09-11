@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  node:
+    build: ./challenge/node
+    restart: on-failure
+    ports:
+      - "1337:1337"
+    environment:
+      backup: 'http://py:1338'
+    depends_on:
+      - py
+    networks:
+      - external_net
+      - internal_net
+
+  py:
+    build: ./challenge/py
+    restart: on-failure
+    networks:
+      - internal_net
+
+
+networks:
+  internal_net:
+    driver: bridge
+  external_net:
+    driver: bridge

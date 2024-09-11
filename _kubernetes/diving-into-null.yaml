@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: diving-into-null
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diving-into-null
+  namespace: diving-into-null
+  labels:
+    chal: diving-into-null
+spec:
+  selector:
+    matchLabels:
+      chal: diving-into-null
+  template:
+    metadata:
+      labels:
+        chal: diving-into-null
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      containers:
+      - name: diving-into-null
+        resources:
+          requests:
+            cpu: 1
+            memory: 500Mi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        ports:
+        - containerPort: 9191
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diving-into-null
+  namespace: diving-into-null
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 9191
+      targetPort: 9191
+  selector:
+    chal: diving-into-null
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: diving-into-null
+  namespace: diving-into-null
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: diving-into-null
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: diving-into-null
+spec:
+  podSelector:
+    matchLabels:
+      chal: diving-into-null
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: diving-into-null
+spec:
+  podSelector:
+    matchLabels:
+      chal: diving-into-null
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution

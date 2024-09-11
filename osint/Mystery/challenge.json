@@ -1,0 +1,7 @@
+{
+  "name": "Mystery",
+  "description": "(Must complete Literally 1984 to unlock) Remember the composer from Literally 1984? Well, they made a song when they were part of a band in 1992, and it turns out that ‌ also made a cover of this song, collabing with another artist. What is the name of that artist? Flag Format: csawctf{ArtistName} (replace all spaces with _)",
+  "author": "lpv2013",
+  "category": "misc",
+  "flag": "csawctf{Chogakusei}"
+}

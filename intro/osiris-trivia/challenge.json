@@ -1,0 +1,9 @@
+{
+    "name": "osiris-trivia",
+    "category": "intro",
+    "author": "bbtc33",
+    "description": "We weren't always known as the Offensive Security, Incidence Response, and Internet Security Lab! Can you find out what our old domain was?\n\nWrap your answer with `csawctf{}`. For example: `csawctf{osiris.cyber.nyu.edu}`",
+    "flag": "csawctf{isis.poly.edu}",
+    "initial": 50,
+    "type": "static"
+}

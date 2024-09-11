@@ -1,0 +1,7 @@
+{
+    "name": "bucket_wars",
+    "description": "let's keep our storage simple -- and remember we don't make mistakes in these parts. We live here: https://bucketwars.ctf.csaw.io",
+    "author": "rollingcoconut,daianx",
+    "category": "misc",
+    "flag": "csawctf{cl0d_Bu4K3tz_AR3_F4Ir_g$m3}"
+}

@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: playing-on-the-backcourt
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: playing-on-the-backcourt
+  namespace: playing-on-the-backcourt
+  labels:
+    chal: playing-on-the-backcourt
+spec:
+  selector:
+    matchLabels:
+      chal: playing-on-the-backcourt
+  template:
+    metadata:
+      labels:
+        chal: playing-on-the-backcourt
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+      containers:
+      - name: playing-on-the-backcourt
+        resources:
+          requests:
+            cpu: 2
+            memory: 2Gi
+          limits:
+            cpu: 4
+            memory: 4Gi
+        ports:
+        - containerPort: 5000
+        securityContext:
+          privileged: false
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: playing-on-the-backcourt
+  namespace: playing-on-the-backcourt
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-east-1:058264123223:certificate/614551b1-8738-4648-9db2-9fb2b502f715
+spec:
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 443
+      targetPort: 5000
+  selector:
+    chal: playing-on-the-backcourt
+
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: playing-on-the-backcourt
+  namespace: playing-on-the-backcourt
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: playing-on-the-backcourt
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-other-namespaces
+  namespace: playing-on-the-backcourt
+spec:
+  podSelector:
+    matchLabels:
+      chal: playing-on-the-backcourt
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector: {}  # Allow traffic only from within the same namespace
+    - ipBlock:
+        cidr: 0.0.0.0/0  # Allow traffic from the internet (for the load balancer)
+  egress:
+  - to:
+    - namespaceSelector: {}  # Block traffic to other namespaces
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-internet
+  namespace: playing-on-the-backcourt
+spec:
+  podSelector:
+    matchLabels:
+      chal: playing-on-the-backcourt
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector: {}  # Allow traffic within the same namespace
+  - to:
+    ports:
+    - protocol: UDP
+      port: 53  # Allow DNS traffic for name resolution
